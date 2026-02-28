@@ -18,8 +18,6 @@ downloadLoadingVideo();
 const express = require('express');
 const path = require('path');
 const { si } = require('nyaapi');
-const cron = require('node-cron');
-
 const PORT = process.env.PORT || 7000;
 const BASE_URL = (process.env.BASE_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 
@@ -43,13 +41,13 @@ function isCacheValid(entry, ttl) {
   return entry && Date.now() - entry.timestamp < ttl;
 }
 
-cron.schedule('*/30 * * * *', () => {
+setInterval(() => {
   const now = Date.now();
   for (const [k, v] of nameCache) if (now - v.timestamp > NAME_CACHE_TTL) nameCache.delete(k);
   for (const [k, v] of nyaaCache) if (now - v.timestamp > NYAA_CACHE_TTL) nyaaCache.delete(k);
   for (const [k, v] of rdCache) if (now - v.timestamp > RD_CACHE_TTL) rdCache.delete(k);
   console.log('🗑️  Cache cleanup done');
-});
+}, 30 * 60 * 1000);
 
 // ============================================================
 // ANIME OFFLINE DATABASE (IMDb → MAL mapping)
