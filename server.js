@@ -219,6 +219,25 @@ function parseEpisode(fullId) {
 // ============================================================
 // NYAA SEARCH
 // ============================================================
+// Normalize macron/circumflex romanji - returns multiple variants since ô can be oo or ou
+function normalizeMacrons(str) {
+  // uu variant: û→uu, ô→oo, ū→uu, ō→oo
+  const oo = str
+    .replace(/[ûú]/gi, m => /[A-Z]/.test(m) ? 'UU' : 'uu')
+    .replace(/[ôó]/gi, m => /[A-Z]/.test(m) ? 'OO' : 'oo')
+    .replace(/ū/gi, m => /[A-Z]/.test(m) ? 'UU' : 'uu')
+    .replace(/ō/gi, m => /[A-Z]/.test(m) ? 'OO' : 'oo')
+    .replace(/ā/gi, m => /[A-Z]/.test(m) ? 'AA' : 'aa');
+  // ou variant: ô→ou (common in some romanji styles)
+  const ou = str
+    .replace(/[ûú]/gi, m => /[A-Z]/.test(m) ? 'UU' : 'uu')
+    .replace(/[ôó]/gi, m => /[A-Z]/.test(m) ? 'OU' : 'ou')
+    .replace(/ū/gi, m => /[A-Z]/.test(m) ? 'UU' : 'uu')
+    .replace(/ō/gi, m => /[A-Z]/.test(m) ? 'OU' : 'ou')
+    .replace(/ā/gi, m => /[A-Z]/.test(m) ? 'AA' : 'aa');
+  return [oo, ou].filter(v => v !== str);
+}
+
 function buildSearchVariants(animeName, episode) {
   // Clean: remove season/part tags and colons
   const clean = animeName
@@ -226,7 +245,11 @@ function buildSearchVariants(animeName, episode) {
     .replace(/2nd Season|3rd Season/i, '')
     .replace(/\([^)]*\)/g, '').replace(/:/g, '').trim();
 
-  const base = [...new Set([animeName, clean].filter(Boolean))];
+  // Add macron-normalized variants
+  const normalized = normalizeMacrons(animeName);
+  const normalizedClean = normalizeMacrons(clean);
+
+  const base = [...new Set([animeName, clean, ...normalized, ...normalizedClean].filter(Boolean))];
 
   if (episode != null) {
     const epPad = String(episode).padStart(2, '0');
