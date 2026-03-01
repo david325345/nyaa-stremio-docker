@@ -238,7 +238,7 @@ function normalizeMacrons(str) {
   return [oo, ou].filter(v => v !== str);
 }
 
-function buildSearchVariants(animeName, episode) {
+function buildSearchVariants(animeName, episode, season = 1) {
   // Clean: remove season/part tags and colons
   const clean = animeName
     .replace(/Season \d+/i, '').replace(/Part \d+/i, '')
@@ -253,7 +253,11 @@ function buildSearchVariants(animeName, episode) {
 
   if (episode != null) {
     const epPad = String(episode).padStart(2, '0');
-    return base.flatMap(n => [`${n} ${epPad}`, `${n} ${String(episode)}`]);
+    const seasonPad = String(season).padStart(2, '0');
+    return base.flatMap(n => [
+      `${n} ${epPad}`,               // "Frieren 01"
+      `${n} S${seasonPad}E${epPad}`, // "Frieren S01E01"
+    ]);
   }
   return base;
 }
@@ -267,7 +271,7 @@ async function searchNyaaForName(animeName, episode, season = 1) {
   }
 
   // Search both with episode number AND just the name (catches batch packs, alternate naming)
-  const variants = buildSearchVariants(animeName, episode);
+  const variants = buildSearchVariants(animeName, episode, season);
   const nameOnlyVariants = buildSearchVariants(animeName, null);
   const allVariants = [...new Set([...variants, ...nameOnlyVariants])];
   console.log(`Nyaa: 🔍 ${allVariants.length} variants for "${animeName}" ep${episode}`);
