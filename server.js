@@ -499,35 +499,55 @@ async function handleStreamRequest(type, fullId, rdKey) {
 
   const hasRD = rdKey && rdKey !== 'nord';
 
-  // Preferred release groups in order
-  const GROUP_PRIORITY = ['SubsPlease', 'Erai-raws', 'EMBER', 'ASW'];
+  // Preferred release groups - SubsPlease 1080p and Erai-raws 1080p always first
+  const TOP_GROUPS = ['SubsPlease', 'Erai-raws'];
+  const OTHER_GROUPS = ['EMBER', 'ASW'];
+
+  function isTopGroup(torrentName) {
+    const n = torrentName || '';
+    return TOP_GROUPS.some(g => n.includes(g)) && /1080p/i.test(n);
+  }
 
   function getGroupPriority(torrentName) {
     const name = torrentName || '';
-    for (let i = 0; i < GROUP_PRIORITY.length; i++) {
-      if (name.toLowerCase().includes(GROUP_PRIORITY[i].toLowerCase())) return i;
+    const allGroups = [...TOP_GROUPS, ...OTHER_GROUPS];
+    for (let i = 0; i < allGroups.length; i++) {
+      if (name.includes(allGroups[i])) return i;
     }
-    return GROUP_PRIORITY.length;
+    return allGroups.length;
   }
 
   function is1080p(torrentName) {
     return /1080p/i.test(torrentName || '');
   }
 
-  const sorted = torrents
-    .filter(t => t.magnet && (t.seeders || 0) > 0)
+  const withMagnet = torrents.filter(t => t.magnet && (t.seeders || 0) > 0);
+
+  // Top: SubsPlease 1080p and Erai-raws 1080p first
+  const topStreams = withMagnet.filter(t => isTopGroup(t.name))
+    .sort((a, b) => {
+      const pa = getGroupPriority(a.name);
+      const pb = getGroupPriority(b.name);
+      if (pa !== pb) return pa - pb;
+      return (b.seeders || 0) - (a.seeders || 0);
+    });
+
+  // Rest: sorted by 1080p → group priority → seeders
+  const topHashes = new Set(topStreams.map(t => t.magnet));
+  const restStreams = withMagnet.filter(t => !topHashes.has(t.magnet))
     .sort((a, b) => {
       const a1080 = is1080p(a.name) ? 0 : 1;
       const b1080 = is1080p(b.name) ? 0 : 1;
-      if (a1080 !== b1080) return a1080 - b1080;  // 1080p first
+      if (a1080 !== b1080) return a1080 - b1080;
       const pa = getGroupPriority(a.name);
       const pb = getGroupPriority(b.name);
-      if (pa !== pb) return pa - pb;               // then preferred group
-      return (b.seeders || 0) - (a.seeders || 0); // then seeders
+      if (pa !== pb) return pa - pb;
+      return (b.seeders || 0) - (a.seeders || 0);
     });
 
-  // Show all found torrents - RD conversion happens ONLY when user clicks a specific stream
-  const streams = sorted.slice(0, 20).map(t => {
+  const sorted = [...topStreams, ...restStreams];
+
+  const streams = sorted.slice(0, 15).map(t => {
     // Detect if torrent title matches S1 pattern (no season number = season 1)
     const name = t.name || '';
     const hasSeasonTag = /S\d{2}|Season\s*\d/i.test(name);
