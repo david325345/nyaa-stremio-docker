@@ -113,13 +113,15 @@ async function getNamesFromIMDb(type, imdbId) {
         }
       }
     `;
+    // Normalize macrons before AniList search (û→uu, ô→ou etc.)
+    const searchName = normalizeMacrons(name)[1] || normalizeMacrons(name)[0] || name;
     const aRes = await axios.post('https://graphql.anilist.co',
-      { query: gql, variables: { search: name } }, { timeout: 8000 });
+      { query: gql, variables: { search: searchName } }, { timeout: 8000 });
 
     const mediaList = aRes.data?.data?.Page?.media || [];
     if (!mediaList.length) {
-      console.log(`AniList: no results for "${name}" → not anime, skipping`);
-      return { names: [], year: null, notAnime: true };
+      console.log(`AniList: no results for "${name}", using Cinemeta name only`);
+      return { names: [name], year: null };
     }
 
     // Find best AniList match: must have similar title to Cinemeta name
@@ -146,8 +148,16 @@ async function getNamesFromIMDb(type, imdbId) {
     );
 
     if (!bestMatch) {
-      console.log(`AniList: no confident match (best score: ${scored[0]?.score?.toFixed(2)}) → not anime, skipping`);
-      return { names: [], year: null, notAnime: true };
+      const bestScore = scored[0]?.score || 0;
+      // If AniList returned results but none match, it's likely not anime
+      // But only skip if score is very low (< 0.1) - near zero means completely different title
+      if (bestScore < 0.1) {
+        console.log(`AniList: no match at all (score=${bestScore.toFixed(2)}) → not anime, skipping`);
+        return { names: [], year: null, notAnime: true };
+      }
+      // Partial match - use Cinemeta name as fallback
+      console.log(`AniList: low confidence match (score=${bestScore.toFixed(2)}), using Cinemeta name only`);
+      return { names: [name], year: null };
     }
 
     const best = bestMatch.m;
