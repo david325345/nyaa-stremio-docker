@@ -120,8 +120,8 @@ async function getNamesFromIMDb(type, imdbId) {
 
     const mediaList = aRes.data?.data?.Page?.media || [];
     if (!mediaList.length) {
-      console.log(`AniList: no results for "${name}", using Cinemeta name only`);
-      return { names: [name], year: null };
+      console.log(`AniList: no results for "${name}" → not anime, skipping`);
+      return { names: [], year: null, notAnime: true };
     }
 
     // Find best AniList match: must have similar title to Cinemeta name
