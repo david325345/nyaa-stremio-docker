@@ -118,8 +118,8 @@ async function getNamesFromIMDb(type, imdbId) {
 
     const mediaList = aRes.data?.data?.Page?.media || [];
     if (!mediaList.length) {
-      console.log(`AniList: no results for "${name}", using Cinemeta name only`);
-      return { names: [name], year: null };
+      console.log(`AniList: no results for "${name}" → not anime, skipping`);
+      return { names: [], year: null, notAnime: true };
     }
 
     // Find best AniList match: must have similar title to Cinemeta name
@@ -139,16 +139,21 @@ async function getNamesFromIMDb(type, imdbId) {
       return { m, score };
     });
 
-    // Pick best scoring match with correct format
+    // Pick best scoring match - must have score > 0.5 to be considered relevant
     scored.sort((a, b) => b.score - a.score);
-    const best = scored.find(({ m, score }) =>
-      score > 0.3 && (isSeriesRequest ? (m.format === 'TV' || m.format === 'TV_SHORT') : m.format === 'MOVIE')
-    )?.m || scored[0]?.m || mediaList[0];
+    const bestMatch = scored.find(({ m, score }) =>
+      score >= 0.5 && (isSeriesRequest ? (m.format === 'TV' || m.format === 'TV_SHORT') : m.format === 'MOVIE')
+    );
 
-    console.log(`AniList: best match format=${best.format} title="${best.title?.romaji || best.title?.english}"`);
+    if (!bestMatch) {
+      console.log(`AniList: no confident match (best score: ${scored[0]?.score?.toFixed(2)}) → not anime, skipping`);
+      return { names: [], year: null, notAnime: true };
+    }
+
+    const best = bestMatch.m;
+    console.log(`AniList: best match score=${bestMatch.score.toFixed(2)} format=${best.format} title="${best.title?.romaji || best.title?.english}"`);
 
     const anilistRomaji = best.title?.romaji;
-    const anilistEnglish = best.title?.english;
 
     // Cinemeta name first (most specific, correct for S2+), AniList romaji as fallback
     const validRomaji = anilistRomaji && isLatinScript(anilistRomaji) && !isJunkTitle(anilistRomaji) ? anilistRomaji : null;
@@ -249,7 +254,10 @@ function buildSearchVariants(animeName, episode, season = 1) {
   const normalized = normalizeMacrons(animeName);
   const normalizedClean = normalizeMacrons(clean);
 
-  const base = [...new Set([animeName, clean, ...normalized, ...normalizedClean].filter(Boolean))];
+  // Also try part after colon (subtitle only): "Yuusha Kei ni Shosu: Choubatsu..." → "Choubatsu Yuusha 9004-tai Keimu Kiroku"
+  const afterColon = animeName.includes(':') ? animeName.split(':').slice(1).join(':').trim() : null;
+
+  const base = [...new Set([animeName, clean, ...normalized, ...normalizedClean, afterColon].filter(Boolean))];
 
   if (episode != null) {
     const epPad = String(episode).padStart(2, '0');
@@ -454,7 +462,11 @@ async function handleStreamRequest(type, fullId, rdKey) {
   console.log(`Parsed season: ${season} episode: ${episode}`);
 
   // Resolve anime names from ID
-  const { names, year } = await resolveAnimeNames(type, fullId);
+  const { names, year, notAnime } = await resolveAnimeNames(type, fullId);
+  if (notAnime) {
+    console.log('Not anime → skipping Nyaa search');
+    return { streams: [] };
+  }
   if (!names.length) {
     console.log('Could not resolve anime names');
     return { streams: [{ name: '❌ Nenalezeno', title: 'Nepodařilo se najít název anime', url: 'https://nyaa.si', behaviorHints: { notWebReady: true } }] };
