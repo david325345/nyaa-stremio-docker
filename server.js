@@ -521,7 +521,7 @@ async function handleStreamRequest(type, fullId, rdKey) {
     return /1080p/i.test(torrentName || '');
   }
 
-  const withMagnet = torrents.filter(t => t.magnet && (t.seeders || 0) > 0);
+  const withMagnet = torrents.filter(t => t.magnet && (t.seeders || 0) > 0 && !/480p/i.test(t.name || ''));
 
   // Top: SubsPlease 1080p and Erai-raws 1080p first
   const topStreams = withMagnet.filter(t => isTopGroup(t.name))
@@ -547,7 +547,7 @@ async function handleStreamRequest(type, fullId, rdKey) {
 
   const sorted = [...topStreams, ...restStreams];
 
-  const streams = sorted.slice(0, 15).map(t => {
+  const streams = sorted.slice(0, 25).map(t => {
     // Detect if torrent title matches S1 pattern (no season number = season 1)
     const name = t.name || '';
     const hasSeasonTag = /S\d{2}|Season\s*\d/i.test(name);
