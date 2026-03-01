@@ -313,6 +313,31 @@ async function searchNyaaForName(animeName, episode, season = 1) {
   const junkPattern = /mini anime|mini-anime|recap|\bova\b|\bspecial\b|ncop|nced|\bpv\b|preview|trailer/i;
   let filtered = allTorrents.filter(t => !junkPattern.test(t.name || ''));
 
+  // Filter out spin-offs/sequels with extra subtitle after the anime name
+  // e.g. "Steins;Gate" should reject "Steins;Gate 0" and "Steins;Gate: My Darling's Embrace"
+  // but keep "Steins;Gate - 01", "Steins;Gate Complete", "Steins;Gate S01E01"
+  const searchNameNorm = animeName.toLowerCase().replace(/[;:]/g, '').replace(/\s+/g, ' ').trim();
+  // Words that indicate a new title/spinoff rather than episode markers
+  const batchWords = new Set(['complete', 'batch', 'collection', 'series', 'bd', 'bluray', 'blu-ray']);
+  const particleWords = new Set(['the','no','wo','wa','ga','ni','to','de','tv','ova']);
+  filtered = filtered.filter(t => {
+    const torrentNorm = (t.name || '').toLowerCase().replace(/[;:]/g, '').replace(/[\[\]()_.\-]/g, ' ').replace(/\s+/g, ' ').trim();
+    const idx = torrentNorm.indexOf(searchNameNorm);
+    if (idx === -1) return true;
+    const afterName = torrentNorm.slice(idx + searchNameNorm.length).trim();
+    const nextWord = afterName.split(/\s+/)[0] || '';
+    if (!nextWord) return true; // nothing after name - keep
+    // Keep: episode numbers (01, 02...), quality (1080p), group names, batch words
+    if (/^\d{2,}/.test(nextWord)) return true;   // 01, 1080p, etc.
+    if (/^s\d+e\d+/i.test(nextWord)) return true; // S01E01
+    if (batchWords.has(nextWord)) return true;       // complete, batch
+    if (particleWords.has(nextWord)) return true;    // japanese particles
+    // Reject: single digit (Steins;Gate 0), standalone word subtitle (My Darling)
+    if (/^\d$/.test(nextWord)) return false;         // "0" → Steins;Gate 0
+    if (/^[a-z]{2,}$/i.test(nextWord)) return false; // subtitle word
+    return true;
+  });
+
   if (episode != null) {
     const ep = parseInt(episode);
     const epPad = String(ep).padStart(2, '0');
